@@ -16,6 +16,10 @@ if 'is_processing' not in st.session_state:
 if 'last_input' not in st.session_state:
     st.session_state.last_input = ""
 
+# Добавляем флаг для отслеживания завершения обработки
+if 'processing_complete' not in st.session_state:
+    st.session_state.processing_complete = False
+
 # Список user-agent для имитации разных браузеров
 USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
@@ -154,7 +158,7 @@ def main():
         full_url_option = st.checkbox("Я ввожу полные URL видео", key="full_url")
         
         # Кнопка для запуска парсинга
-        start_button = st.button("Получить просмотры")
+        start_button = st.button("Получить просмотры", key="start_button")
         
         if start_button and video_ids_input:
             # Сохраняем ввод пользователя
@@ -166,83 +170,96 @@ def main():
             df = pd.DataFrame(processed_data)
             st.session_state.results_df = df
             st.session_state.is_processing = True
+            st.session_state.processing_complete = False
             
             # Перезагружаем страницу для запуска обработки
             st.rerun()
     
-    # Если есть данные и процесс запущен, начинаем обработку
-    if st.session_state.is_processing and st.session_state.results_df is not None:
+    # Показываем результаты, если они есть
+    if st.session_state.results_df is not None:
         df = st.session_state.results_df
-        
-        with col2:
-            st.subheader("Ход выполнения:")
-            
-            # Создаем область для вывода прогресса
-            progress_container = st.empty()
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            count_text = st.empty()
-            
-            # Счетчики
-            total_count = len(df)
-            pending_count = sum(df["Статус"] == "Ожидает обработки")
-            processed_count = total_count - pending_count
-            success_count = sum(df["Статус"] == "Успешно")
-            error_count = processed_count - success_count
-            
-            # Отображаем текущий прогресс
-            progress_container.write(f"Обработано: {processed_count}/{total_count} строк")
-            if total_count > 0:
-                progress_bar.progress(processed_count / total_count)
-            count_text.info(f"Успешно: {success_count}, Ошибок: {error_count}, Ожидает: {pending_count}")
-            
-            # Найти строки, которые еще не обработаны
-            rows_to_process = df[df["Статус"] == "Ожидает обработки"].index.tolist()
-            
-            if rows_to_process:
-                # Обрабатываем только одну строку за раз, чтобы обновлять интерфейс
-                row_idx = rows_to_process[0]
-                video_id = df.loc[row_idx, "ID видео"]
+
+        # Обрабатываем строки, если процесс еще идет
+        if st.session_state.is_processing:
+            with col2:
+                st.subheader("Ход выполнения:")
                 
-                if video_id:
-                    status_text.write(f"Обработка: {video_id}")
-                    views = get_video_views(video_id)
+                # Создаем область для вывода прогресса
+                progress_container = st.empty()
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                count_text = st.empty()
+                
+                # Счетчики
+                total_count = len(df)
+                pending_count = sum(df["Статус"] == "Ожидает обработки")
+                processed_count = total_count - pending_count
+                success_count = sum(df["Статус"] == "Успешно")
+                error_count = processed_count - success_count
+                
+                # Отображаем текущий прогресс
+                progress_container.write(f"Обработано: {processed_count}/{total_count} строк")
+                if total_count > 0:
+                    progress_bar.progress(processed_count / total_count)
+                count_text.info(f"Успешно: {success_count}, Ошибок: {error_count}, Ожидает: {pending_count}")
+                
+                # Найти строки, которые еще не обработаны
+                rows_to_process = df[df["Статус"] == "Ожидает обработки"].index.tolist()
+                
+                if rows_to_process:
+                    # Обрабатываем только одну строку за раз, чтобы обновлять интерфейс
+                    row_idx = rows_to_process[0]
+                    video_id = df.loc[row_idx, "ID видео"]
                     
-                    if isinstance(views, int):
-                        df.loc[row_idx, "Просмотры"] = views
-                        df.loc[row_idx, "Статус"] = "Успешно"
-                    else:
-                        df.loc[row_idx, "Просмотры"] = "N/A"
-                        df.loc[row_idx, "Статус"] = views
-                
-                # Обновляем DataFrame в session_state
-                st.session_state.results_df = df
-                
-                # Обновляем страницу для продолжения обработки следующей строки
-                time.sleep(0.1)  # Небольшая задержка перед обновлением
-                st.rerun()
-            else:
-                # Все строки обработаны
-                st.session_state.is_processing = False
-                status_text.success("Обработка завершена!")
+                    if video_id:
+                        status_text.write(f"Обработка: {video_id}")
+                        views = get_video_views(video_id)
+                        
+                        if isinstance(views, int):
+                            df.loc[row_idx, "Просмотры"] = views
+                            df.loc[row_idx, "Статус"] = "Успешно"
+                        else:
+                            df.loc[row_idx, "Просмотры"] = "N/A"
+                            df.loc[row_idx, "Статус"] = views
+                    
+                    # Обновляем DataFrame в session_state
+                    st.session_state.results_df = df
+                    
+                    # Обновляем страницу для продолжения обработки следующей строки
+                    time.sleep(0.1)  # Небольшая задержка перед обновлением
+                    st.rerun()
+                else:
+                    # Все строки обработаны
+                    st.session_state.is_processing = False
+                    st.session_state.processing_complete = True
+                    status_text.success("Обработка завершена!")
         
-        # После завершения обработки или при наличии результатов, показываем их
+        # Отображаем результаты в любом случае (завершена обработка или нет)
         st.subheader("Результаты:")
         st.dataframe(df)
         
+        # Создаем генератор для CSV
+        @st.cache_data
+        def get_csv_data(dataframe):
+            return dataframe.to_csv(index=False).encode('utf-8')
+        
+        # Создаем CSV используя кэшированный генератор
+        csv_data = get_csv_data(df)
+        
         # Предлагаем скачать результаты в CSV
-        csv = df.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="Скачать данные как CSV",
-            data=csv,
+            data=csv_data,
             file_name="youtube_views.csv",
             mime="text/csv",
+            key="download_csv"
         )
         
         # Кнопка для очистки результатов и перезапуска
-        if st.button("Очистить результаты и начать заново"):
+        if st.button("Очистить результаты и начать заново", key="clear_button"):
             st.session_state.results_df = None
             st.session_state.is_processing = False
+            st.session_state.processing_complete = False
             st.rerun()
     
     # Дополнительная информация
