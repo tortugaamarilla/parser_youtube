@@ -1,3 +1,12 @@
-streamlit==1.25.0
-pandas==2.0.3
-pytube==15.0.0 
+numpy==1.26.4
+python-dateutil==2.9.0.post0
+pytz==2025.2
+pandas==2.2.3
+beautifulsoup4==4.13.3
+requests==2.32.3
+packaging==24.2
+GitPython==3.1.44
+Pillow==11.1.0
+protobuf==5.29.4
+pyarrow==19.0.1
+streamlit==1.44.1 
